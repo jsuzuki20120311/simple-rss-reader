@@ -18,14 +18,6 @@ const StyleSheet = Object.assign(NativeStyleSheet, {
   },
 });
 
-const extractorWebViewStyle = {
-  position: 'absolute' as const,
-  left: -10000,
-  width: 1,
-  height: 1,
-  opacity: 0,
-};
-
 type Feed = { id: string; title: string; url: string };
 type Article = { id: string; title: string; link: string; description: string; date: string; feedTitle: string };
 const FEEDS_KEY = '@simple-rss-reader/feeds';
@@ -152,9 +144,8 @@ export default function App() {
         </View>
         {webLoading && <View style={styles.webLoading}><ActivityIndicator color="#8f82ff" /></View>}
         <View style={styles.webContent}>
-          {!readerMode && webArticle && <WebView ref={webViewRef} source={{ uri: webArticle.link }} style={styles.webView} injectedJavaScript={READER_SCRIPT} onMessage={(event) => handleReaderMessage(event.nativeEvent.data)} onLoadStart={() => setWebLoading(true)} onLoadEnd={() => setWebLoading(false)} onNavigationStateChange={(state) => { setCanGoBack(state.canGoBack); setCanGoForward(state.canGoForward); }} />}
-          {readerMode && webArticle && <WebView source={{ uri: webArticle.link }} style={extractorWebViewStyle} injectedJavaScript={READER_SCRIPT} onMessage={(event) => handleReaderMessage(event.nativeEvent.data)} onLoadStart={() => { setWebLoading(true); setReaderHtml(null); }} onLoadEnd={() => setWebLoading(false)} />}
-          {readerMode && readerHtml && <WebView source={{ html: readerHtml, baseUrl: webArticle?.link }} style={styles.webView} />}
+          {webArticle && readerMode && readerHtml && <WebView key="reader" source={{ html: readerHtml, baseUrl: webArticle.link }} style={styles.webView} />}
+          {webArticle && (!readerMode || !readerHtml) && <WebView key={readerMode ? 'extractor' : 'normal'} ref={webViewRef} source={{ uri: webArticle.link }} style={[styles.webView, readerMode && !readerHtml && { opacity: 0 }]} injectedJavaScript={READER_SCRIPT} onMessage={(event) => handleReaderMessage(event.nativeEvent.data)} onLoadStart={() => { setWebLoading(true); if (readerMode) setReaderHtml(null); }} onLoadEnd={() => setWebLoading(false)} onNavigationStateChange={(state) => { setCanGoBack(state.canGoBack); setCanGoForward(state.canGoForward); }} />}
           {readerMode && !readerHtml && <View style={styles.readerWaiting}><ActivityIndicator color="#8f82ff" /><Text style={styles.readerWaitingText}>{readerError ? '本文を抽出できませんでした' : '読みやすい表示を準備しています'}</Text></View>}
         </View>
         <View style={styles.webToolbar}>
