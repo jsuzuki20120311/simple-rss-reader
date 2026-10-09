@@ -271,10 +271,13 @@ const READER_SCRIPT = `
       content.querySelectorAll('[src]').forEach(function (node) { try { node.src = new URL(node.getAttribute('src'), location.href).href; } catch (_) {} });
       content.querySelectorAll('a[href]').forEach(function (node) { try { node.href = new URL(node.getAttribute('href'), location.href).href; } catch (_) {} });
       var title = document.querySelector('h1') ? document.querySelector('h1').innerText : document.title;
-      var style = 'html{background:__READER_BG__;color:__READER_TEXT__}body{margin:0 auto;padding:28px 22px 60px;max-width:760px;font-size:18px;line-height:1.9}body,body *{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","YuGothic","Yu Gothic",sans-serif!important}h1{font-size:30px;line-height:1.35;margin:0 0 28px}h2,h3{line-height:1.45;margin-top:2em}p{margin:1.2em 0}img,video{max-width:100%;height:auto;border-radius:8px}a{color:__READER_LINK__}figure{margin:1.8em 0}figcaption{font-size:13px;opacity:.7}pre{overflow:auto;background:rgba(127,127,127,.14);padding:14px;border-radius:8px}';
+      var style = 'html{background:__READER_BG__!important;color:__READER_TEXT__!important}body{display:block!important;margin:0 auto!important;padding:28px 22px 60px!important;max-width:760px!important;background:__READER_BG__!important;color:__READER_TEXT__!important;font-size:18px!important;line-height:1.9!important}#rss-reader-root{display:block!important;visibility:visible!important;opacity:1!important}#rss-reader-root h1{font-size:30px!important;line-height:1.35!important;margin:0 0 28px!important}#rss-reader-root h2,#rss-reader-root h3{line-height:1.45!important;margin-top:2em!important}#rss-reader-root p{margin:1.2em 0!important}#rss-reader-root img,#rss-reader-root video{max-width:100%!important;height:auto!important;border-radius:8px}#rss-reader-root a{color:__READER_LINK__!important}#rss-reader-root figure{margin:1.8em 0!important}#rss-reader-root figcaption{font-size:13px!important;opacity:.7}#rss-reader-root pre{overflow:auto!important;background:rgba(127,127,127,.14)!important;padding:14px!important;border-radius:8px}';
       document.documentElement.lang = 'ja';
-      document.head.innerHTML = '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>' + style + '</style>';
-      document.body.innerHTML = '<h1>' + title.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</h1>' + content.innerHTML;
+      var readerStyle = document.createElement('style');
+      readerStyle.id = 'rss-reader-style';
+      readerStyle.textContent = style;
+      document.head.appendChild(readerStyle);
+      document.body.innerHTML = '<main id="rss-reader-root"><h1>' + title.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</h1>' + content.innerHTML + '</main>';
       window.scrollTo(0, 0);
       window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'reader-ready' }));
     } catch (error) {
