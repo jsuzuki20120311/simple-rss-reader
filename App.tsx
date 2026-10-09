@@ -29,6 +29,7 @@ const StyleSheet = Object.assign(NativeStyleSheet, {
 });
 
 type Feed = { id: string; title: string; url: string };
+type FeedSource = "google" | "bing" | "url";
 type Article = {
   id: string;
   title: string;
@@ -305,6 +306,8 @@ export default function App() {
   const [canGoBack, setCanGoBack] = useState(false);
   const [canGoForward, setCanGoForward] = useState(false);
   const webViewRef = useRef<WebView>(null);
+  const [feedSource, setFeedSource] = useState<FeedSource>("google");
+  const [searchKeyword, setSearchKeyword] = useState("");
   const [url, setUrl] = useState("");
   const [feedName, setFeedName] = useState("");
 
@@ -367,8 +370,25 @@ export default function App() {
   }, [feeds]);
 
   const addFeed = async () => {
-    const value = url.trim();
-    if (!/^https?:\/\//i.test(value)) {
+    const keyword = searchKeyword.trim();
+    let value = url.trim();
+    let defaultTitle = value;
+
+    if (feedSource !== "url") {
+      if (!keyword) {
+        Alert.alert("検索ワードを入力してください");
+        return;
+      }
+
+      const query = encodeURIComponent(keyword);
+      if (feedSource === "google") {
+        value = `https://news.google.com/rss/search?q=${query}&hl=ja&gl=JP&ceid=JP:ja`;
+        defaultTitle = `Googleニュース: ${keyword}`;
+      } else {
+        value = `https://www.bing.com/news/search?q=${query}&format=rss&setlang=ja`;
+        defaultTitle = `Bingニュース: ${keyword}`;
+      }
+    } else if (!/^https?:\/\//i.test(value)) {
       Alert.alert(
         "URLを確認してください",
         "http:// または https:// から始まるURLを入力してください。",
@@ -377,11 +397,12 @@ export default function App() {
     }
     const next = [
       ...feeds,
-      { id: `${Date.now()}`, title: feedName.trim() || value, url: value },
+      { id: `${Date.now()}`, title: feedName.trim() || defaultTitle, url: value },
     ];
     setFeeds(next);
     await AsyncStorage.setItem(FEEDS_KEY, JSON.stringify(next));
     setUrl("");
+    setSearchKeyword("");
     setFeedName("");
     setModal(false);
   };
@@ -592,6 +613,37 @@ export default function App() {
         >
           <View style={[styles.modal, { backgroundColor: theme.card }]}>
             <Text style={[styles.modalTitle, { color: theme.text }]}>RSSフィードを追加</Text>
+            <View style={styles.feedSourceSelector}>
+              {([
+                ["google", "Google検索"],
+                ["bing", "Bing検索"],
+                ["url", "URL指定"],
+              ] as const).map(([source, label]) => {
+                const selected = feedSource === source;
+                return (
+                  <Pressable
+                    key={source}
+                    style={[
+                      styles.feedSourceButton,
+                      {
+                        backgroundColor: selected ? theme.accent : theme.surface,
+                        borderColor: selected ? theme.accent : theme.border,
+                      },
+                    ]}
+                    onPress={() => setFeedSource(source)}
+                  >
+                    <Text
+                      style={[
+                        styles.feedSourceButtonText,
+                        { color: selected ? "#fff" : theme.text },
+                      ]}
+                    >
+                      {label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
             <TextInput
               style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border, borderWidth: 1 }]}
               placeholder="フィード名（任意）"
@@ -599,15 +651,27 @@ export default function App() {
               value={feedName}
               onChangeText={setFeedName}
             />
-            <TextInput
-              style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border, borderWidth: 1 }]}
-              placeholder="https://example.com/feed.xml"
-              placeholderTextColor={theme.muted}
-              autoCapitalize="none"
-              keyboardType="url"
-              value={url}
-              onChangeText={setUrl}
-            />
+            {feedSource === "url" ? (
+              <TextInput
+                style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border, borderWidth: 1 }]}
+                placeholder="https://example.com/feed.xml"
+                placeholderTextColor={theme.muted}
+                autoCapitalize="none"
+                keyboardType="url"
+                value={url}
+                onChangeText={setUrl}
+              />
+            ) : (
+              <TextInput
+                style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border, borderWidth: 1 }]}
+                placeholder="検索ワード（例: React Native）"
+                placeholderTextColor={theme.muted}
+                returnKeyType="done"
+                value={searchKeyword}
+                onChangeText={setSearchKeyword}
+                onSubmitEditing={addFeed}
+              />
+            )}
             <View style={styles.modalActions}>
               <Pressable onPress={() => setModal(false)}>
                 <Text style={[styles.cancel, { color: theme.muted }]}>キャンセル</Text>
@@ -860,6 +924,20 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 12,
   },
+  feedSourceSelector: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 14,
+  },
+  feedSourceButton: {
+    flex: 1,
+    alignItems: "center",
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 10,
+  },
+  feedSourceButtonText: { fontSize: 12, fontWeight: "800" },
   modalActions: {
     flexDirection: "row",
     justifyContent: "flex-end",
