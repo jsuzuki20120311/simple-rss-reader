@@ -271,10 +271,12 @@ const READER_SCRIPT = `
       content.querySelectorAll('[src]').forEach(function (node) { try { node.src = new URL(node.getAttribute('src'), location.href).href; } catch (_) {} });
       content.querySelectorAll('a[href]').forEach(function (node) { try { node.href = new URL(node.getAttribute('href'), location.href).href; } catch (_) {} });
       var title = document.querySelector('h1') ? document.querySelector('h1').innerText : document.title;
-      var html = '<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>' +
-        'html{background:__READER_BG__;color:__READER_TEXT__}body{margin:0 auto;padding:28px 22px 60px;max-width:760px;font-size:18px;line-height:1.9}body,body *{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","YuGothic","Yu Gothic",sans-serif!important}h1{font-size:30px;line-height:1.35;margin:0 0 28px}h2,h3{line-height:1.45;margin-top:2em}p{margin:1.2em 0}img,video{max-width:100%;height:auto;border-radius:8px}a{color:__READER_LINK__}figure{margin:1.8em 0}figcaption{font-size:13px;opacity:.7}pre{overflow:auto;background:rgba(127,127,127,.14);padding:14px;border-radius:8px}</style></head><body><h1>' +
-        title.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</h1>' + content.innerHTML + '</body></html>';
-      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'reader', html: html }));
+      var style = 'html{background:__READER_BG__;color:__READER_TEXT__}body{margin:0 auto;padding:28px 22px 60px;max-width:760px;font-size:18px;line-height:1.9}body,body *{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","YuGothic","Yu Gothic",sans-serif!important}h1{font-size:30px;line-height:1.35;margin:0 0 28px}h2,h3{line-height:1.45;margin-top:2em}p{margin:1.2em 0}img,video{max-width:100%;height:auto;border-radius:8px}a{color:__READER_LINK__}figure{margin:1.8em 0}figcaption{font-size:13px;opacity:.7}pre{overflow:auto;background:rgba(127,127,127,.14);padding:14px;border-radius:8px}';
+      document.documentElement.lang = 'ja';
+      document.head.innerHTML = '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>' + style + '</style>';
+      document.body.innerHTML = '<h1>' + title.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</h1>' + content.innerHTML;
+      window.scrollTo(0, 0);
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'reader-ready' }));
     } catch (error) {
       window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'reader-error' }));
     }
@@ -301,7 +303,7 @@ export default function App() {
   const [webArticle, setWebArticle] = useState<Article | null>(null);
   const [webLoading, setWebLoading] = useState(false);
   const [readerMode, setReaderMode] = useState(true);
-  const [readerHtml, setReaderHtml] = useState<string | null>(null);
+  const [readerReady, setReaderReady] = useState(false);
   const [readerError, setReaderError] = useState(false);
   const [canGoBack, setCanGoBack] = useState(false);
   const [canGoForward, setCanGoForward] = useState(false);
@@ -418,14 +420,14 @@ export default function App() {
   };
   const openArticle = (article: Article) => {
     setReaderMode(true);
-    setReaderHtml(null);
+    setReaderReady(false);
     setReaderError(false);
     setWebArticle(article);
   };
   const closeWebView = () => {
     setWebArticle(null);
     setWebLoading(false);
-    setReaderHtml(null);
+    setReaderReady(false);
     setReaderError(false);
     setCanGoBack(false);
     setCanGoForward(false);
@@ -433,9 +435,9 @@ export default function App() {
   const handleReaderMessage = (data: string) => {
     try {
       const message = JSON.parse(data);
-      if (message.type === "reader") {
+      if (message.type === "reader-ready") {
         setWebLoading(false);
-        setReaderHtml(message.html);
+        setReaderReady(true);
         setReaderError(false);
       } else if (message.type === "reader-error") {
         setWebLoading(false);
@@ -731,7 +733,11 @@ export default function App() {
             </Text>
             <Pressable
               style={styles.modeButton}
-              onPress={() => setReaderMode((value) => !value)}
+              onPress={() => {
+                setReaderReady(false);
+                setReaderError(false);
+                setReaderMode((value) => !value);
+              }}
             >
               <Text style={[styles.modeButtonText, { color: theme.accent }]}>
                 {readerMode ? "通常" : "リーダー"}
@@ -744,29 +750,22 @@ export default function App() {
             </View>
           )}
           <View style={styles.webContent}>
-            {webArticle && readerMode && readerHtml && (
+            {webArticle && (
               <WebView
-                key="reader"
-                source={{ html: readerHtml, baseUrl: webArticle.link }}
-                style={styles.webView}
-              />
-            )}
-            {webArticle && (!readerMode || !readerHtml) && (
-              <WebView
-                key={readerMode ? "extractor" : "normal"}
+                key={readerMode ? "reader" : "normal"}
                 ref={webViewRef}
                 source={{ uri: webArticle.link }}
                 style={[
                   styles.webView,
-                  readerMode && !readerHtml && { opacity: 0 },
+                  readerMode && !readerReady && { opacity: 0 },
                 ]}
-                injectedJavaScript={readerScript}
+                injectedJavaScript={readerMode ? readerScript : undefined}
                 onMessage={(event) =>
                   handleReaderMessage(event.nativeEvent.data)
                 }
                 onLoadStart={() => {
                   setWebLoading(true);
-                  if (readerMode) setReaderHtml(null);
+                  if (readerMode) setReaderReady(false);
                 }}
                 onLoadEnd={() => setWebLoading(false)}
                 onNavigationStateChange={(state) => {
@@ -775,7 +774,7 @@ export default function App() {
                 }}
               />
             )}
-            {readerMode && !readerHtml && (
+            {readerMode && !readerReady && (
               <View style={[styles.readerWaiting, { backgroundColor: theme.readerBackground }]}>
                 <ActivityIndicator color={theme.accent} />
                 <Text style={[styles.readerWaitingText, { color: theme.muted }]}>
