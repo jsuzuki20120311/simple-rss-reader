@@ -762,7 +762,6 @@ export default function App() {
                   styles.webView,
                   readerMode && !readerReady && { opacity: 0 },
                 ]}
-                injectedJavaScript={readerMode ? readerScript : undefined}
                 onMessage={(event) =>
                   handleReaderMessage(event.nativeEvent.data)
                 }
@@ -770,7 +769,12 @@ export default function App() {
                   setWebLoading(true);
                   if (readerMode) setReaderReady(false);
                 }}
-                onLoadEnd={() => setWebLoading(false)}
+                onLoadEnd={() => {
+                  setWebLoading(false);
+                  if (readerMode) {
+                    webViewRef.current?.injectJavaScript(readerScript);
+                  }
+                }}
                 onNavigationStateChange={(state) => {
                   setCanGoBack(state.canGoBack);
                   setCanGoForward(state.canGoForward);
