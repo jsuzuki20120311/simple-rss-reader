@@ -7,7 +7,16 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 
-const StyleSheet = Object.assign(NativeStyleSheet, { absoluteFillObject: NativeStyleSheet.absoluteFill });
+const StyleSheet = Object.assign(NativeStyleSheet, {
+  absoluteFillObject: {
+    position: 'absolute' as const,
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 2,
+  },
+});
 
 type Feed = { id: string; title: string; url: string };
 type Article = { id: string; title: string; link: string; description: string; date: string; feedTitle: string };
