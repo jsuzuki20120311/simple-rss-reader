@@ -75,8 +75,17 @@ export default function App() {
   const [url, setUrl] = useState('');
   const [feedName, setFeedName] = useState('');
 
-  useEffect(() => { (async () => { const savedFeeds = await AsyncStorage.getItem(FEEDS_KEY); const savedBookmarks = await AsyncStorage.getItem(BOOKMARKS_KEY); if (savedFeeds) setFeeds(JSON.parse(savedFeeds)); if (savedBookmarks) setBookmarks(JSON.parse(savedBookmarks)); })(); }, []);
-  const saveBookmarks = async (next: Article[]) => { setBookmarks(next); await AsyncStorage.setItem(BOOKMARKS_KEY, JSON.stringify(next)); };
+  useEffect(() => { (async () => {
+    const savedFeeds = await AsyncStorage.getItem(FEEDS_KEY);
+    const savedBookmarks = await AsyncStorage.getItem(BOOKMARKS_KEY); 
+    if (savedFeeds) setFeeds(JSON.parse(savedFeeds)); 
+    if (savedBookmarks) setBookmarks(JSON.parse(savedBookmarks)); })();
+  }, []);
+
+  const saveBookmarks = async (next: Article[]) => { 
+    setBookmarks(next); await AsyncStorage.setItem(BOOKMARKS_KEY, JSON.stringify(next));
+  };
+
   const refresh = async () => {
     if (!feeds.length) { setArticles([]); return; }
     setLoading(true);
@@ -84,7 +93,11 @@ export default function App() {
     catch { Alert.alert('読み込みエラー', 'RSSを取得できませんでした。URLやネットワークを確認してください。'); }
     finally { setLoading(false); }
   };
-  useEffect(() => { refresh(); }, [feeds]);
+
+  useEffect(() => { 
+    refresh();
+  }, [feeds]);
+
   const addFeed = async () => { const value = url.trim(); if (!/^https?:\/\//i.test(value)) { Alert.alert('URLを確認してください', 'http:// または https:// から始まるURLを入力してください。'); return; } const next = [...feeds, { id: `${Date.now()}`, title: feedName.trim() || value, url: value }]; setFeeds(next); await AsyncStorage.setItem(FEEDS_KEY, JSON.stringify(next)); setUrl(''); setFeedName(''); setModal(false); };
   const removeFeed = async (id: string) => { const next = feeds.filter((feed) => feed.id !== id); setFeeds(next); await AsyncStorage.setItem(FEEDS_KEY, JSON.stringify(next)); };
   const openArticle = (article: Article) => { setReaderMode(true); setReaderHtml(null); setReaderError(false); setWebArticle(article); };
@@ -92,6 +105,7 @@ export default function App() {
   const visible = active === 'bookmarks' ? bookmarks : articles;
   const empty = active === 'feeds' ? '登録したRSSフィードはありません。' : active === 'bookmarks' ? '保存した記事はありません。' : feeds.length ? '記事がありません。' : 'まずRSSフィードを登録してください。';
   const feedList = useMemo(() => feeds, [feeds]);
+
   return <SafeAreaView style={styles.safe}><StatusBar style="light" /><View style={styles.header}><View><Text style={styles.eyebrow}>LOCAL READER</Text><Text style={styles.heading}>{active === 'feeds' ? 'フィード' : active === 'bookmarks' ? 'ブックマーク' : 'タイムライン'}</Text></View><Pressable style={styles.addButton} onPress={() => setModal(true)}><Text style={styles.addText}>＋ RSS</Text></Pressable></View>
     {active === 'feeds' ? <FlatList data={feedList} keyExtractor={(item) => item.id} contentContainerStyle={styles.list} ListEmptyComponent={<Text style={styles.empty}>{empty}</Text>} renderItem={({ item }) => <View style={styles.feedRow}><View style={styles.feedIcon}><Text style={styles.feedIconText}>RSS</Text></View><View style={styles.feedInfo}><Text style={styles.cardTitle}>{item.title}</Text><Text style={styles.url} numberOfLines={1}>{item.url}</Text></View><Pressable onPress={() => removeFeed(item.id)}><Text style={styles.delete}>削除</Text></Pressable></View>} /> : <FlatList data={visible} keyExtractor={(item) => item.id} contentContainerStyle={styles.list} refreshing={loading} onRefresh={refresh} ListEmptyComponent={<Text style={styles.empty}>{empty}</Text>} renderItem={({ item }) => <Pressable style={styles.card} onPress={() => item.link && openArticle(item)}><View style={styles.cardMeta}><Text style={styles.source}>{item.feedTitle}</Text><Pressable onPress={() => saveBookmarks(bookmarks.some((b) => b.id === item.id) ? bookmarks.filter((b) => b.id !== item.id) : [...bookmarks, item])}><Text style={styles.star}>{bookmarks.some((b) => b.id === item.id) ? '★' : '☆'}</Text></Pressable></View><Text style={styles.cardTitle}>{item.title}</Text>{!!item.description && <Text style={styles.description} numberOfLines={3}>{item.description}</Text>}<Text style={styles.date}>{item.date ? new Date(item.date).toLocaleDateString('ja-JP') : ''}</Text></Pressable>} />}
     <View style={styles.tabs}>{[['articles', '記事'], ['feeds', 'フィード'], ['bookmarks', '保存']].map(([key, label]) => <Pressable key={key} style={styles.tab} onPress={() => setActive(key as typeof active)}><Text style={[styles.tabText, active === key && styles.tabActive]}>{label}</Text></Pressable>)}</View>
