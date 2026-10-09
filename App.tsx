@@ -18,6 +18,14 @@ const StyleSheet = Object.assign(NativeStyleSheet, {
   },
 });
 
+const extractorWebViewStyle = {
+  position: 'absolute' as const,
+  left: -10000,
+  width: 1,
+  height: 1,
+  opacity: 0,
+};
+
 type Feed = { id: string; title: string; url: string };
 type Article = { id: string; title: string; link: string; description: string; date: string; feedTitle: string };
 const FEEDS_KEY = '@simple-rss-reader/feeds';
@@ -111,6 +119,21 @@ export default function App() {
   const removeFeed = async (id: string) => { const next = feeds.filter((feed) => feed.id !== id); setFeeds(next); await AsyncStorage.setItem(FEEDS_KEY, JSON.stringify(next)); };
   const openArticle = (article: Article) => { setReaderMode(true); setReaderHtml(null); setReaderError(false); setWebArticle(article); };
   const closeWebView = () => { setWebArticle(null); setReaderHtml(null); setReaderError(false); setCanGoBack(false); setCanGoForward(false); };
+  const handleReaderMessage = (data: string) => {
+    try {
+      const message = JSON.parse(data);
+      if (message.type === 'reader') {
+        setReaderHtml(message.html);
+        setReaderError(false);
+      } else if (message.type === 'reader-error') {
+        setReaderError(true);
+        setReaderMode(false);
+      }
+    } catch {
+      setReaderError(true);
+      setReaderMode(false);
+    }
+  };
   const visible = active === 'bookmarks' ? bookmarks : articles;
   const empty = active === 'feeds' ? '登録したRSSフィードはありません。' : active === 'bookmarks' ? '保存した記事はありません。' : feeds.length ? '記事がありません。' : 'まずRSSフィードを登録してください。';
   const feedList = useMemo(() => feeds, [feeds]);
@@ -129,13 +152,14 @@ export default function App() {
         </View>
         {webLoading && <View style={styles.webLoading}><ActivityIndicator color="#8f82ff" /></View>}
         <View style={styles.webContent}>
-          {webArticle && <WebView ref={webViewRef} source={{ uri: webArticle.link }} style={styles.webView} injectedJavaScript={READER_SCRIPT} onMessage={(event) => { try { const message = JSON.parse(event.nativeEvent.data); if (message.type === 'reader') { setReaderHtml(message.html); setReaderError(false); } else if (message.type === 'reader-error') { setReaderError(true); setReaderMode(false); } } catch { setReaderError(true); } }} onLoadStart={() => { setWebLoading(true); setReaderHtml(null); }} onLoadEnd={() => setWebLoading(false)} onNavigationStateChange={(state) => { setCanGoBack(state.canGoBack); setCanGoForward(state.canGoForward); }} />}
-          {readerMode && readerHtml && <WebView source={{ html: readerHtml, baseUrl: webArticle?.link }} style={styles.readerView} />}
+          {!readerMode && webArticle && <WebView ref={webViewRef} source={{ uri: webArticle.link }} style={styles.webView} injectedJavaScript={READER_SCRIPT} onMessage={(event) => handleReaderMessage(event.nativeEvent.data)} onLoadStart={() => setWebLoading(true)} onLoadEnd={() => setWebLoading(false)} onNavigationStateChange={(state) => { setCanGoBack(state.canGoBack); setCanGoForward(state.canGoForward); }} />}
+          {readerMode && webArticle && <WebView source={{ uri: webArticle.link }} style={extractorWebViewStyle} injectedJavaScript={READER_SCRIPT} onMessage={(event) => handleReaderMessage(event.nativeEvent.data)} onLoadStart={() => { setWebLoading(true); setReaderHtml(null); }} onLoadEnd={() => setWebLoading(false)} />}
+          {readerMode && readerHtml && <WebView source={{ html: readerHtml, baseUrl: webArticle?.link }} style={styles.webView} />}
           {readerMode && !readerHtml && <View style={styles.readerWaiting}><ActivityIndicator color="#8f82ff" /><Text style={styles.readerWaitingText}>{readerError ? '本文を抽出できませんでした' : '読みやすい表示を準備しています'}</Text></View>}
         </View>
         <View style={styles.webToolbar}>
-          <Pressable style={styles.webNavButton} disabled={!canGoBack} onPress={() => webViewRef.current?.goBack()}><Text style={[styles.webNavText, !canGoBack && styles.webNavDisabled]}>← 戻る</Text></Pressable>
-          <Pressable style={styles.webNavButton} disabled={!canGoForward} onPress={() => webViewRef.current?.goForward()}><Text style={[styles.webNavText, !canGoForward && styles.webNavDisabled]}>進む →</Text></Pressable>
+          <Pressable style={styles.webNavButton} disabled={readerMode || !canGoBack} onPress={() => webViewRef.current?.goBack()}><Text style={[styles.webNavText, (readerMode || !canGoBack) && styles.webNavDisabled]}>← 戻る</Text></Pressable>
+          <Pressable style={styles.webNavButton} disabled={readerMode || !canGoForward} onPress={() => webViewRef.current?.goForward()}><Text style={[styles.webNavText, (readerMode || !canGoForward) && styles.webNavDisabled]}>進む →</Text></Pressable>
         </View>
       </SafeAreaView>
     </Modal>
