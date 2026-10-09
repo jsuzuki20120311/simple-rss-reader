@@ -110,18 +110,21 @@ export default function App() {
   const addFeed = async () => { const value = url.trim(); if (!/^https?:\/\//i.test(value)) { Alert.alert('URLを確認してください', 'http:// または https:// から始まるURLを入力してください。'); return; } const next = [...feeds, { id: `${Date.now()}`, title: feedName.trim() || value, url: value }]; setFeeds(next); await AsyncStorage.setItem(FEEDS_KEY, JSON.stringify(next)); setUrl(''); setFeedName(''); setModal(false); };
   const removeFeed = async (id: string) => { const next = feeds.filter((feed) => feed.id !== id); setFeeds(next); await AsyncStorage.setItem(FEEDS_KEY, JSON.stringify(next)); };
   const openArticle = (article: Article) => { setReaderMode(true); setReaderHtml(null); setReaderError(false); setWebArticle(article); };
-  const closeWebView = () => { setWebArticle(null); setReaderHtml(null); setReaderError(false); setCanGoBack(false); setCanGoForward(false); };
+  const closeWebView = () => { setWebArticle(null); setWebLoading(false); setReaderHtml(null); setReaderError(false); setCanGoBack(false); setCanGoForward(false); };
   const handleReaderMessage = (data: string) => {
     try {
       const message = JSON.parse(data);
       if (message.type === 'reader') {
+        setWebLoading(false);
         setReaderHtml(message.html);
         setReaderError(false);
       } else if (message.type === 'reader-error') {
+        setWebLoading(false);
         setReaderError(true);
         setReaderMode(false);
       }
     } catch {
+      setWebLoading(false);
       setReaderError(true);
       setReaderMode(false);
     }
