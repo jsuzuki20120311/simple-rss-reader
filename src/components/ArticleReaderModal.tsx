@@ -1,8 +1,8 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { StatusBar } from "expo-status-bar";
 import { ActivityIndicator, Modal, Pressable, SafeAreaView, Text, View } from "react-native";
 import { WebView } from "react-native-webview";
-import { getReaderScript } from "../lib/reader";
+import { getReaderDocument } from "../lib/reader";
 import type { AppTheme, Article } from "../types";
 import { styles } from "../styles";
 
@@ -21,10 +21,47 @@ export function ArticleReaderModal({
   const [readerMode, setReaderMode] = useState(true);
   const [readerReady, setReaderReady] = useState(false);
   const [readerError, setReaderError] = useState(false);
+  const [readerDocument, setReaderDocument] = useState<string | null>(null);
+  const [readerPageUrl, setReaderPageUrl] = useState(article.link);
   const [canGoBack, setCanGoBack] = useState(false);
   const [canGoForward, setCanGoForward] = useState(false);
+  const readerRequestRef = useRef<AbortController | null>(null);
   const webViewRef = useRef<WebView>(null);
-  const readerScript = useMemo(() => getReaderScript(theme), [theme]);
+
+  const loadReaderPage = useCallback(
+    async (url: string) => {
+      readerRequestRef.current?.abort();
+      const controller = new AbortController();
+      readerRequestRef.current = controller;
+      setWebLoading(true);
+      setReaderReady(false);
+      setReaderError(false);
+      setReaderDocument(null);
+
+      try {
+        const response = await fetch(url, {
+          headers: { Accept: "text/html,application/xhtml+xml" },
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const sourceHtml = await response.text();
+        const finalUrl = response.url || url;
+        setReaderPageUrl(finalUrl);
+        setReaderDocument(getReaderDocument(sourceHtml, finalUrl, theme));
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") return;
+        setReaderError(true);
+        setWebLoading(false);
+      }
+    },
+    [theme],
+  );
+
+  useEffect(() => {
+    if (readerMode) loadReaderPage(article.link);
+    return () => readerRequestRef.current?.abort();
+  }, [article.link, loadReaderPage, readerMode]);
 
   const handleReaderMessage = (data: string) => {
     try {
@@ -36,12 +73,10 @@ export function ArticleReaderModal({
       } else if (message.type === "reader-error") {
         setWebLoading(false);
         setReaderError(true);
-        setReaderMode(false);
       }
     } catch {
       setWebLoading(false);
       setReaderError(true);
-      setReaderMode(false);
     }
   };
 
@@ -79,32 +114,49 @@ export function ArticleReaderModal({
           </View>
         )}
         <View style={styles.webContent}>
-          <WebView
-            key={readerMode ? "reader" : "normal"}
-            ref={webViewRef}
-            source={{ uri: article.link }}
-            style={[
-              styles.webView,
-              readerMode && !readerReady && { opacity: 0 },
-            ]}
-            onMessage={(event) =>
-              handleReaderMessage(event.nativeEvent.data)
-            }
-            onLoadStart={() => {
-              setWebLoading(true);
-              if (readerMode) setReaderReady(false);
-            }}
-            onLoadEnd={() => {
-              setWebLoading(false);
-              if (readerMode) {
-                webViewRef.current?.injectJavaScript(readerScript);
-              }
-            }}
-            onNavigationStateChange={(state) => {
-              setCanGoBack(state.canGoBack);
-              setCanGoForward(state.canGoForward);
-            }}
-          />
+          {readerMode ? (
+            readerDocument && (
+              <WebView
+                key={readerPageUrl}
+                source={{ html: readerDocument, baseUrl: readerPageUrl }}
+                style={[
+                  styles.webView,
+                  !readerReady && { opacity: 0 },
+                ]}
+                originWhitelist={["*"]}
+                onMessage={(event) =>
+                  handleReaderMessage(event.nativeEvent.data)
+                }
+                onError={() => {
+                  setWebLoading(false);
+                  setReaderError(true);
+                }}
+                onShouldStartLoadWithRequest={(request) => {
+                  if (
+                    request.navigationType === "click" &&
+                    /^https?:\/\//i.test(request.url)
+                  ) {
+                    loadReaderPage(request.url);
+                    return false;
+                  }
+                  return true;
+                }}
+              />
+            )
+          ) : (
+            <WebView
+              key="normal"
+              ref={webViewRef}
+              source={{ uri: article.link }}
+              style={styles.webView}
+              onLoadStart={() => setWebLoading(true)}
+              onLoadEnd={() => setWebLoading(false)}
+              onNavigationStateChange={(state) => {
+                setCanGoBack(state.canGoBack);
+                setCanGoForward(state.canGoForward);
+              }}
+            />
+          )}
           {readerMode && !readerReady && (
             <View style={[styles.readerWaiting, { backgroundColor: theme.readerBackground }]}>
               <ActivityIndicator color={theme.accent} />
