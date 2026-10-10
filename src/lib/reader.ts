@@ -1,6 +1,11 @@
 import type { AppTheme } from "../types";
 import { getReaderStyles } from "./readerStyles";
 
+const READABILITY_CDN_URL =
+  "https://cdn.jsdelivr.net/npm/@mozilla/readability@0.6.0/Readability.js";
+const READABILITY_INTEGRITY =
+  "sha384-e+TY0H9ZOYdOLMJKCM3iXGmTbjVVh+PJ+GTEKuGjQY0+bsSOJohq+GWUAmhGjKOi";
+
 // This script runs in an isolated WebView document. The source page itself is
 // parsed as inert HTML and is never loaded or executed by the WebView.
 const STATIC_READER_SCRIPT = `
@@ -170,6 +175,32 @@ const STATIC_READER_SCRIPT = `
         .replace(/>/g, '&gt;');
     }
 
+    function extractArticle(sourceDocument) {
+      if (typeof Readability === 'function') {
+        var parsedArticle = new Readability(
+          sourceDocument.cloneNode(true),
+          { keepClasses: true }
+        ).parse();
+
+        if (parsedArticle && parsedArticle.content) {
+          var parsedContent = new DOMParser().parseFromString(
+            parsedArticle.content,
+            'text/html'
+          );
+
+          return {
+            content: parsedContent.body,
+            title: parsedArticle.title || getArticleTitle(sourceDocument)
+          };
+        }
+      }
+
+      return {
+        content: findArticleRoot(sourceDocument).cloneNode(true),
+        title: getArticleTitle(sourceDocument)
+      };
+    }
+
     function disableFixedAndAbsolutePositioning() {
       document
         .querySelectorAll('#rss-reader-root, #rss-reader-root *')
@@ -182,7 +213,7 @@ const STATIC_READER_SCRIPT = `
         });
     }
 
-    function renderArticle(sourceDocument, content) {
+    function renderArticle(sourceDocument, content, title) {
       document.documentElement.lang = 'ja';
       copyStylesheets(sourceDocument);
 
@@ -192,7 +223,7 @@ const STATIC_READER_SCRIPT = `
       document.head.appendChild(readerStyle);
       document.body.innerHTML = [
         '<main id="rss-reader-root">',
-        '<h1>', escapeHtml(getArticleTitle(sourceDocument)), '</h1>',
+        '<h1>', escapeHtml(title), '</h1>',
         content.innerHTML,
         '</main>'
       ].join('');
@@ -211,14 +242,15 @@ const STATIC_READER_SCRIPT = `
           SOURCE_HTML,
           'text/html'
         );
-        var content = findArticleRoot(sourceDocument).cloneNode(true);
+        var article = extractArticle(sourceDocument);
+        var content = article.content;
 
         removeUnwantedContent(content);
         removeExecutableAttributes(content);
         resolveUrls(content, '[src]', 'src');
         resolveSrcsets(content);
         resolveUrls(content, 'a[href]', 'href');
-        renderArticle(sourceDocument, content);
+        renderArticle(sourceDocument, content, article.title);
         notifyApp('reader-ready');
       } catch (error) {
         notifyApp('reader-error');
@@ -258,6 +290,11 @@ export const getReaderDocument = (
     <meta name="viewport" content="width=device-width, initial-scale=1">
   </head>
   <body>
+    <script
+      src="${READABILITY_CDN_URL}"
+      integrity="${READABILITY_INTEGRITY}"
+      crossorigin="anonymous"
+    ></script>
     <script>${script}</script>
   </body>
 </html>`;
