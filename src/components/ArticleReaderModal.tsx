@@ -22,7 +22,8 @@ export function ArticleReaderModal({
   const [readerReady, setReaderReady] = useState(false);
   const [readerError, setReaderError] = useState(false);
   const [readerDocument, setReaderDocument] = useState<string | null>(null);
-  const [readerPageUrl, setReaderPageUrl] = useState(article.link);
+  const [currentUrl, setCurrentUrl] = useState(article.link);
+  const [normalStartUrl, setNormalStartUrl] = useState(article.link);
   const [canGoBack, setCanGoBack] = useState(false);
   const [canGoForward, setCanGoForward] = useState(false);
   const readerRequestRef = useRef<AbortController | null>(null);
@@ -37,6 +38,7 @@ export function ArticleReaderModal({
       setReaderReady(false);
       setReaderError(false);
       setReaderDocument(null);
+      setCurrentUrl(url);
 
       try {
         const response = await fetch(url, {
@@ -47,7 +49,7 @@ export function ArticleReaderModal({
 
         const sourceHtml = await response.text();
         const finalUrl = response.url || url;
-        setReaderPageUrl(finalUrl);
+        setCurrentUrl(finalUrl);
         setReaderDocument(getReaderDocument(sourceHtml, finalUrl, theme));
       } catch (error) {
         if (error instanceof Error && error.name === "AbortError") return;
@@ -59,9 +61,25 @@ export function ArticleReaderModal({
   );
 
   useEffect(() => {
-    if (readerMode) loadReaderPage(article.link);
+    setCurrentUrl(article.link);
+    loadReaderPage(article.link);
     return () => readerRequestRef.current?.abort();
-  }, [article.link, loadReaderPage, readerMode]);
+  }, [article.link, loadReaderPage]);
+
+  const toggleReaderMode = () => {
+    setReaderReady(false);
+    setReaderError(false);
+
+    if (readerMode) {
+      readerRequestRef.current?.abort();
+      setWebLoading(false);
+      setNormalStartUrl(currentUrl);
+      setReaderMode(false);
+    } else {
+      setReaderMode(true);
+      loadReaderPage(currentUrl);
+    }
+  };
 
   const handleReaderMessage = (data: string) => {
     try {
@@ -97,11 +115,7 @@ export function ArticleReaderModal({
           </Text>
           <Pressable
             style={styles.modeButton}
-            onPress={() => {
-              setReaderReady(false);
-              setReaderError(false);
-              setReaderMode((value) => !value);
-            }}
+            onPress={toggleReaderMode}
           >
             <Text style={[styles.modeButtonText, { color: theme.accent }]}>
               {readerMode ? "通常" : "リーダー"}
@@ -117,8 +131,8 @@ export function ArticleReaderModal({
           {readerMode ? (
             readerDocument && (
               <WebView
-                key={readerPageUrl}
-                source={{ html: readerDocument, baseUrl: readerPageUrl }}
+                key={currentUrl}
+                source={{ html: readerDocument, baseUrl: currentUrl }}
                 style={[
                   styles.webView,
                   !readerReady && { opacity: 0 },
@@ -147,13 +161,16 @@ export function ArticleReaderModal({
             <WebView
               key="normal"
               ref={webViewRef}
-              source={{ uri: article.link }}
+              source={{ uri: normalStartUrl }}
               style={styles.webView}
               onLoadStart={() => setWebLoading(true)}
               onLoadEnd={() => setWebLoading(false)}
               onNavigationStateChange={(state) => {
                 setCanGoBack(state.canGoBack);
                 setCanGoForward(state.canGoForward);
+                if (/^https?:\/\//i.test(state.url)) {
+                  setCurrentUrl(state.url);
+                }
               }}
             />
           )}
