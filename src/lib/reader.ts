@@ -113,6 +113,20 @@ const READER_SCRIPT = `
         .replace(/>/g, '&gt;');
     }
 
+    function disableFixedAndAbsolutePositioning() {
+      var readerElements = document.querySelectorAll(
+        '#rss-reader-root, #rss-reader-root *'
+      );
+
+      readerElements.forEach(function (node) {
+        var position = window.getComputedStyle(node).position;
+
+        if (position === 'fixed' || position === 'absolute') {
+          node.style.setProperty('position', 'static', 'important');
+        }
+      });
+    }
+
     function renderArticle(content, title) {
       document.documentElement.lang = 'ja';
 
@@ -129,6 +143,7 @@ const READER_SCRIPT = `
         '</main>'
       ].join('');
 
+      disableFixedAndAbsolutePositioning();
       window.scrollTo(0, 0);
     }
 
