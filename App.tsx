@@ -314,6 +314,7 @@ export default function App() {
   const [readerError, setReaderError] = useState(false);
   const [canGoBack, setCanGoBack] = useState(false);
   const [canGoForward, setCanGoForward] = useState(false);
+  const articleListRef = useRef<FlatList<Article>>(null);
   const webViewRef = useRef<WebView>(null);
   const [feedSource, setFeedSource] = useState<FeedSource>("google");
   const [searchKeyword, setSearchKeyword] = useState("");
@@ -386,6 +387,12 @@ export default function App() {
       setSelectedFeedId("all");
     }
   }, [feeds, selectedFeedId]);
+
+  useEffect(() => {
+    if (active === "articles") {
+      articleListRef.current?.scrollToOffset({ offset: 0, animated: false });
+    }
+  }, [selectedFeedId]);
 
   const addFeed = async () => {
     const keyword = searchKeyword.trim();
@@ -617,6 +624,7 @@ export default function App() {
         />
       ) : (
         <FlatList
+          ref={articleListRef}
           data={visible}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
