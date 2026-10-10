@@ -10,6 +10,7 @@ import {
   Platform,
   Pressable,
   SafeAreaView,
+  ScrollView,
   StyleSheet as NativeStyleSheet,
   Text,
   TextInput,
@@ -36,6 +37,7 @@ type Article = {
   link: string;
   description: string;
   date: string;
+  feedId?: string;
   feedTitle: string;
 };
 type ThemeId =
@@ -226,7 +228,7 @@ const field = (block: string, name: string) =>
       new RegExp(`<${name}(?:\\s[^>]*)?>([\\s\\S]*?)</${name}>`, "i"),
     )?.[1] ?? "",
   );
-const parseFeed = (xml: string, feedTitle: string): Article[] => {
+const parseFeed = (xml: string, feed: Feed): Article[] => {
   const blocks = [
     ...xml.matchAll(/<(item|entry)(?:\s[^>]*)?>([\s\S]*?)<\/(?:item|entry)>/gi),
   ].map((m) => m[2]);
@@ -242,12 +244,13 @@ const parseFeed = (xml: string, feedTitle: string): Article[] => {
         field(block, "published") ||
         field(block, "updated");
       return {
-        id: link || `${feedTitle}-${index}-${title}`,
+        id: link || `${feed.title}-${index}-${title}`,
         title,
         link,
         description: field(block, "description") || field(block, "summary"),
         date,
-        feedTitle,
+        feedId: feed.id,
+        feedTitle: feed.title,
       };
     })
     .filter((article) => article.link);
@@ -299,6 +302,7 @@ export default function App() {
   const [active, setActive] = useState<"articles" | "feeds" | "bookmarks">(
     "articles",
   );
+  const [selectedFeedId, setSelectedFeedId] = useState("all");
   const [loading, setLoading] = useState(false);
   const [modal, setModal] = useState(false);
   const [themeModal, setThemeModal] = useState(false);
@@ -351,7 +355,7 @@ export default function App() {
           feeds.map(async (feed) => {
             const response = await fetch(feed.url);
             if (!response.ok) throw new Error(`${response.status}`);
-            return parseFeed(await response.text(), feed.title);
+            return parseFeed(await response.text(), feed);
           }),
         )
       ).flat();
@@ -373,6 +377,15 @@ export default function App() {
   useEffect(() => {
     refresh();
   }, [feeds]);
+
+  useEffect(() => {
+    if (
+      selectedFeedId !== "all" &&
+      !feeds.some((feed) => feed.id === selectedFeedId)
+    ) {
+      setSelectedFeedId("all");
+    }
+  }, [feeds, selectedFeedId]);
 
   const addFeed = async () => {
     const keyword = searchKeyword.trim();
@@ -453,7 +466,12 @@ export default function App() {
       setReaderMode(false);
     }
   };
-  const visible = active === "bookmarks" ? bookmarks : articles;
+  const visible =
+    active === "bookmarks"
+      ? bookmarks
+      : selectedFeedId === "all"
+        ? articles
+        : articles.filter((article) => article.feedId === selectedFeedId);
   const empty =
     active === "feeds"
       ? "登録したRSSフィードはありません。"
@@ -522,6 +540,58 @@ export default function App() {
           </Pressable>
         </View>
       </View>
+      {active === "articles" && (
+        <View
+          style={[
+            styles.feedTabsContainer,
+            {
+              backgroundColor: theme.background,
+              borderBottomColor: theme.border,
+            },
+          ]}
+        >
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.feedTabsContent}
+          >
+            {[{ id: "all", title: "すべて" }, ...feeds].map((feed) => {
+              const selected = selectedFeedId === feed.id;
+              return (
+                <Pressable
+                  key={feed.id}
+                  style={[
+                    styles.feedTab,
+                    {
+                      backgroundColor: selected
+                        ? theme.accent
+                        : theme.surface,
+                      borderColor: selected ? theme.accent : theme.border,
+                    },
+                  ]}
+                  onPress={() => setSelectedFeedId(feed.id)}
+                >
+                  <Text
+                    numberOfLines={1}
+                    style={[
+                      styles.feedTabText,
+                      {
+                        color: selected
+                          ? theme.id === "monochrome"
+                            ? "#ffffff"
+                            : theme.background
+                          : theme.text,
+                      },
+                    ]}
+                  >
+                    {feed.title}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
       {active === "feeds" ? (
         <FlatList
           data={feedList}
@@ -846,6 +916,22 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   addText: { color: "#fff", fontWeight: "700" },
+  feedTabsContainer: {
+    borderBottomWidth: 1,
+    paddingBottom: 10,
+  },
+  feedTabsContent: {
+    gap: 8,
+    paddingHorizontal: 16,
+  },
+  feedTab: {
+    maxWidth: 180,
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+  },
+  feedTabText: { fontSize: 13, fontWeight: "800" },
   list: { padding: 16, paddingTop: 4, paddingBottom: 100, flexGrow: 1 },
   card: {
     backgroundColor: "#151d31",
