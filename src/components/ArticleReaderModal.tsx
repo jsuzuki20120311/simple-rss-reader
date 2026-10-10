@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { StatusBar } from "expo-status-bar";
 import { ActivityIndicator, Modal, Pressable, SafeAreaView, Text, View } from "react-native";
 import { WebView } from "react-native-webview";
+import { requiresBrowserRedirect } from "../lib/articleNavigation";
 import { getReaderDocument } from "../lib/reader";
 import type { AppTheme, Article } from "../types";
 import { styles } from "../styles";
@@ -17,8 +18,9 @@ export function ArticleReaderModal({
   theme,
   onClose,
 }: Props) {
+  const startsInNormalMode = requiresBrowserRedirect(article.link);
   const [webLoading, setWebLoading] = useState(false);
-  const [readerMode, setReaderMode] = useState(true);
+  const [readerMode, setReaderMode] = useState(!startsInNormalMode);
   const [readerReady, setReaderReady] = useState(false);
   const [readerError, setReaderError] = useState(false);
   const [readerDocument, setReaderDocument] = useState<string | null>(null);
@@ -27,6 +29,7 @@ export function ArticleReaderModal({
   const [canGoBack, setCanGoBack] = useState(false);
   const [canGoForward, setCanGoForward] = useState(false);
   const readerRequestRef = useRef<AbortController | null>(null);
+  const redirectToReaderRef = useRef(startsInNormalMode);
   const webViewRef = useRef<WebView>(null);
 
   const loadReaderPage = useCallback(
@@ -62,9 +65,14 @@ export function ArticleReaderModal({
 
   useEffect(() => {
     setCurrentUrl(article.link);
-    loadReaderPage(article.link);
+    setNormalStartUrl(article.link);
+    redirectToReaderRef.current = startsInNormalMode;
+
+    if (!startsInNormalMode) {
+      loadReaderPage(article.link);
+    }
     return () => readerRequestRef.current?.abort();
-  }, [article.link, loadReaderPage]);
+  }, [article.link, loadReaderPage, startsInNormalMode]);
 
   const toggleReaderMode = () => {
     setReaderReady(false);
@@ -76,8 +84,32 @@ export function ArticleReaderModal({
       setNormalStartUrl(currentUrl);
       setReaderMode(false);
     } else {
+      redirectToReaderRef.current = false;
       setReaderMode(true);
       loadReaderPage(currentUrl);
+    }
+  };
+
+  const handleNormalNavigation = (state: {
+    url: string;
+    loading: boolean;
+    canGoBack: boolean;
+    canGoForward: boolean;
+  }) => {
+    setCanGoBack(state.canGoBack);
+    setCanGoForward(state.canGoForward);
+
+    if (!/^https?:\/\//i.test(state.url)) return;
+    setCurrentUrl(state.url);
+
+    if (
+      redirectToReaderRef.current &&
+      !state.loading &&
+      !requiresBrowserRedirect(state.url)
+    ) {
+      redirectToReaderRef.current = false;
+      setReaderMode(true);
+      loadReaderPage(state.url);
     }
   };
 
@@ -165,13 +197,7 @@ export function ArticleReaderModal({
               style={styles.webView}
               onLoadStart={() => setWebLoading(true)}
               onLoadEnd={() => setWebLoading(false)}
-              onNavigationStateChange={(state) => {
-                setCanGoBack(state.canGoBack);
-                setCanGoForward(state.canGoForward);
-                if (/^https?:\/\//i.test(state.url)) {
-                  setCurrentUrl(state.url);
-                }
-              }}
+              onNavigationStateChange={handleNormalNavigation}
             />
           )}
           {readerMode && !readerReady && (
