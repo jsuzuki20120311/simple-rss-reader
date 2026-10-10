@@ -5,6 +5,7 @@ export const getReaderStyles = (theme: AppTheme) => `
   html {
     background: ${theme.readerBackground} !important;
     color: ${theme.readerText} !important;
+    overflow: auto !important;
   }
 
   body {
@@ -16,6 +17,7 @@ export const getReaderStyles = (theme: AppTheme) => `
     color: ${theme.readerText} !important;
     font-size: 18px !important;
     line-height: 1.9 !important;
+    overflow: auto !important;
   }
 
   #rss-reader-root {

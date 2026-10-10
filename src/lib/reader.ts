@@ -127,14 +127,33 @@ const READER_SCRIPT = `
       });
     }
 
+    function preserveStylesheetsOnly() {
+      var headElements = Array.prototype.slice.call(document.head.children);
+
+      headElements.forEach(function (node) {
+        var tagName = node.tagName.toLowerCase();
+        var isStyle = tagName === 'style';
+        var isStylesheet =
+          tagName === 'link' &&
+          (node.getAttribute('rel') || '').toLowerCase().split(/\\s+/)
+            .indexOf('stylesheet') !== -1;
+
+        if (!isStyle && !isStylesheet) {
+          node.remove();
+        }
+      });
+    }
+
     function renderArticle(content, title) {
       document.documentElement.lang = 'ja';
+
+      // Keep the site's CSS and Web fonts, but remove scripts and metadata.
+      preserveStylesheetsOnly();
 
       var readerStyle = document.createElement('style');
       readerStyle.id = 'rss-reader-style';
       readerStyle.textContent = __READER_STYLES__;
 
-      // Preserve the site's stylesheets and Web fonts for Japanese text.
       document.head.appendChild(readerStyle);
       document.body.innerHTML = [
         '<main id="rss-reader-root">',
